@@ -1,0 +1,22 @@
+Prompt 1:
+Add two links to the footer in @templates/base.html:
+
+- "Terms and Conditions"
+- "Privacy Policy"
+
+Both should be plain text links, no special styling needed for now.
+Point both to "#" as placeholder hrefs since the pages don't exist yet.
+
+Do not modify anything else on the page.
+
+Prompt 2:
+1. Add a new route in [@app.py](http://app.py/):
+GET /terms → renders templates/terms.html
+2. Create templates/terms.html with generic terms and conditions
+content appropriate for a personal expense tracking app.
+Include sections like: Acceptance of Terms, Use of Service,
+User Data, Limitations of Liability, and Changes to Terms.
+Extend base.html if it exists, otherwise match the style of
+landing.html.
+3. In @templates/landing.html, update the "Terms and Conditions"
+footer link href from "#" to "/terms".
