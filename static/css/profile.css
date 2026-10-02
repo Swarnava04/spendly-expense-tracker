@@ -181,6 +181,10 @@
     .profile-grid { grid-template-columns: 1fr; }
 }
 
+.profile-muted {
+    color: var(--ink-muted);
+}
+
 @media (max-width: 640px) {
     .profile-page { padding: 1.5rem 1rem 3rem; }
     .profile-stats { grid-template-columns: 1fr; }
