@@ -96,7 +96,7 @@ pytest -s
 | `GET, POST /register` | Implemented — renders `register.html`; POST creates user, redirects to `/login` |
 | `GET, POST /login` | Implemented — renders `login.html`; POST checks credentials, sets `session["user_id"]`, redirects to `/` |
 | `GET /logout` | Implemented — clears session, redirects to `/` |
-| `GET /profile` | Stub — Step 4 |
+| `GET /profile` | Implemented (placeholder data) — renders `profile.html`; redirects guests to `/login` |
 | `GET /expenses/add` | Stub — Step 7 |
 | `GET /expenses/<id>/edit` | Stub — Step 8 |
 | `GET /expenses/<id>/delete` | Stub — Step 9 |
