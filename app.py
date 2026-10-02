@@ -84,13 +84,59 @@ def privacy():
     return render_template("privacy.html")
 
 
+@app.route("/profile")
+def profile():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    # Placeholder data for the design step — replaced by DB queries later
+    user = {
+        "name": "Demo User",
+        "email": "demo@spendly.com",
+        "initials": "DU",
+        "member_since": "January 2026",
+    }
+    transactions = [
+        {"date": "2026-09-28", "description": "Grocery run", "category": "Food", "amount": 1850.00},
+        {"date": "2026-09-26", "description": "Electricity bill", "category": "Bills", "amount": 2400.00},
+        {"date": "2026-09-24", "description": "Metro card top-up", "category": "Transport", "amount": 500.00},
+        {"date": "2026-09-22", "description": "Pharmacy", "category": "Health", "amount": 720.50},
+        {"date": "2026-09-20", "description": "Movie tickets", "category": "Entertainment", "amount": 600.00},
+        {"date": "2026-09-18", "description": "New headphones", "category": "Shopping", "amount": 2999.00},
+        {"date": "2026-09-15", "description": "Dinner out", "category": "Food", "amount": 1250.00},
+        {"date": "2026-09-12", "description": "Gift wrapping", "category": "Other", "amount": 150.00},
+    ]
+
+    totals = {}
+    for txn in transactions:
+        totals[txn["category"]] = totals.get(txn["category"], 0) + txn["amount"]
+    total_spent = sum(totals.values())
+    categories = [
+        {
+            "name": name,
+            "amount": amount,
+            "pct": round(amount / total_spent * 100, 1) if total_spent else 0,
+        }
+        for name, amount in sorted(totals.items(), key=lambda kv: kv[1], reverse=True)
+    ]
+    stats = {
+        "total_spent": total_spent,
+        "transaction_count": len(transactions),
+        "top_category": categories[0]["name"] if categories else "—",
+    }
+
+    return render_template(
+        "profile.html",
+        user=user,
+        stats=stats,
+        categories=categories,
+        transactions=transactions,
+    )
+
+
 # ------------------------------------------------------------------ #
 # Placeholder routes — students will implement these                  #
 # ------------------------------------------------------------------ #
-
-@app.route("/profile")
-def profile():
-    return "Profile page — coming in Step 4"
 
 
 @app.route("/expenses/add")
