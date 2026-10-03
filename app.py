@@ -1,9 +1,19 @@
 import sqlite3
+from datetime import datetime
 
 from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
 
-from database.db import create_user, get_db, get_user_by_email, init_db, seed_db
+from database.db import (
+    create_user,
+    get_category_totals,
+    get_expense_summary,
+    get_recent_expenses,
+    get_user_by_email,
+    get_user_by_id,
+    init_db,
+    seed_db,
+)
 
 app = Flask(__name__)
 app.secret_key = "spendly-dev-secret-change-me"
@@ -84,46 +94,80 @@ def privacy():
     return render_template("privacy.html")
 
 
+# ------------------------------------------------------------------ #
+# Profile view-model builders                                         #
+# ------------------------------------------------------------------ #
+
+def build_user(user_row):
+    words = user_row["name"].split()
+    initials = (words[0][0] + (words[-1][0] if len(words) > 1 else "")).upper()
+    member_since = datetime.strptime(
+        user_row["created_at"], "%Y-%m-%d %H:%M:%S"
+    ).strftime("%B %Y")
+    return {
+        "name": user_row["name"],
+        "email": user_row["email"],
+        "initials": initials,
+        "member_since": member_since,
+    }
+
+
+# --- Summary stats (subagent 2) ------------------------------------ #
+
+def build_stats(user_id):
+    """Return {"total_spent": float, "transaction_count": int}."""
+    summary = get_expense_summary(user_id)
+    return {
+        "total_spent": float(summary["total_spent"]),
+        "transaction_count": int(summary["transaction_count"]),
+    }
+
+
+# --- Category breakdown (subagent 3) ------------------------------- #
+
+def build_categories(user_id, total_spent):
+    """Return [{"name", "amount", "pct"}, ...] sorted by amount desc."""
+    return [
+        {
+            "name": row["category"],
+            "amount": float(row["total"]),
+            "pct": round(row["total"] / total_spent * 100, 1) if total_spent else 0,
+        }
+        for row in get_category_totals(user_id)
+    ]
+
+
+# --- Transaction history (subagent 1) ------------------------------ #
+
+def build_transactions(user_id):
+    """Return the 10 most recent expenses as dicts for the table."""
+    return [
+        {
+            "date": row["date"],
+            "description": row["description"],
+            "category": row["category"],
+            "amount": float(row["amount"]),
+        }
+        for row in get_recent_expenses(user_id)
+    ]
+
+
 @app.route("/profile")
 def profile():
     if "user_id" not in session:
         return redirect(url_for("login"))
 
-    # Placeholder data for the design step — replaced by DB queries later
-    user = {
-        "name": "Demo User",
-        "email": "demo@spendly.com",
-        "initials": "DU",
-        "member_since": "January 2026",
-    }
-    transactions = [
-        {"date": "2026-09-28", "description": "Grocery run", "category": "Food", "amount": 1850.00},
-        {"date": "2026-09-26", "description": "Electricity bill", "category": "Bills", "amount": 2400.00},
-        {"date": "2026-09-24", "description": "Metro card top-up", "category": "Transport", "amount": 500.00},
-        {"date": "2026-09-22", "description": "Pharmacy", "category": "Health", "amount": 720.50},
-        {"date": "2026-09-20", "description": "Movie tickets", "category": "Entertainment", "amount": 600.00},
-        {"date": "2026-09-18", "description": "New headphones", "category": "Shopping", "amount": 2999.00},
-        {"date": "2026-09-15", "description": "Dinner out", "category": "Food", "amount": 1250.00},
-        {"date": "2026-09-12", "description": "Gift wrapping", "category": "Other", "amount": 150.00},
-    ]
+    user_id = session["user_id"]
+    user_row = get_user_by_id(user_id)
+    if user_row is None:
+        session.clear()
+        return redirect(url_for("login"))
 
-    totals = {}
-    for txn in transactions:
-        totals[txn["category"]] = totals.get(txn["category"], 0) + txn["amount"]
-    total_spent = sum(totals.values())
-    categories = [
-        {
-            "name": name,
-            "amount": amount,
-            "pct": round(amount / total_spent * 100, 1) if total_spent else 0,
-        }
-        for name, amount in sorted(totals.items(), key=lambda kv: kv[1], reverse=True)
-    ]
-    stats = {
-        "total_spent": total_spent,
-        "transaction_count": len(transactions),
-        "top_category": categories[0]["name"] if categories else "—",
-    }
+    user = build_user(user_row)
+    stats = build_stats(user_id)
+    categories = build_categories(user_id, stats["total_spent"])
+    stats["top_category"] = categories[0]["name"] if categories else "—"
+    transactions = build_transactions(user_id)
 
     return render_template(
         "profile.html",

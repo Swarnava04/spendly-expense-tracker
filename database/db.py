@@ -51,6 +51,61 @@ def get_user_by_email(email):
         conn.close()
 
 
+def get_user_by_id(user_id):
+    conn = get_db()
+    try:
+        return conn.execute(
+            "SELECT id, name, email, created_at FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+
+# --- Summary stats (subagent 2) ------------------------------------ #
+
+def get_expense_summary(user_id):
+    conn = get_db()
+    try:
+        return conn.execute(
+            "SELECT COALESCE(SUM(amount), 0) AS total_spent, "
+            "COUNT(*) AS transaction_count "
+            "FROM expenses WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+
+# --- Category breakdown (subagent 3) ------------------------------- #
+
+def get_category_totals(user_id):
+    conn = get_db()
+    try:
+        return conn.execute(
+            "SELECT category, SUM(amount) AS total FROM expenses "
+            "WHERE user_id = ? GROUP BY category "
+            "ORDER BY total DESC, category ASC",
+            (user_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+
+# --- Transaction history (subagent 1) ------------------------------ #
+
+def get_recent_expenses(user_id, limit=10):
+    conn = get_db()
+    try:
+        return conn.execute(
+            "SELECT id, date, description, category, amount FROM expenses "
+            "WHERE user_id = ? ORDER BY date DESC, id DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+    finally:
+        conn.close()
+
+
 def init_db():
     conn = get_db()
     try:

@@ -11,16 +11,21 @@ Spendly is a lightweight personal expense tracker built with Flask and SQLite.
 spendly/
 ├── app.py              # All routes — single file, no blueprints
 ├── database/
-│   └── db.py           # SQLite helpers: get_db(), init_db(), seed_db()
+│   └── db.py           # SQLite helpers: get_db(), init_db(), seed_db(),
+│                       #   create_user(), get_user_by_email(), get_user_by_id(),
+│                       #   get_expense_summary(), get_category_totals(), get_recent_expenses()
 ├── templates/
 │   ├── base.html       # Shared layout — all templates must extend this
 │   └── *.html          # One template per page
 ├── static/
 │   ├── css/
 │   │   ├── style.css       # Global styles
-│   │   └── landing.css     # Landing-page-only styles
+│   │   └── profile.css     # Profile-page-only styles
 │   └── js/
 │       └── main.js         # Vanilla JS only
+├── tests/
+│   ├── conftest.py     # Fixtures — temp SQLite DB per test, never the real one
+│   └── test_*.py       # One test file per feature
 └── requirements.txt
 ```
 
@@ -96,7 +101,7 @@ pytest -s
 | `GET, POST /register` | Implemented — renders `register.html`; POST creates user, redirects to `/login` |
 | `GET, POST /login` | Implemented — renders `login.html`; POST checks credentials, sets `session["user_id"]`, redirects to `/` |
 | `GET /logout` | Implemented — clears session, redirects to `/` |
-| `GET /profile` | Implemented (placeholder data) — renders `profile.html`; redirects guests to `/login` |
+| `GET /profile` | Implemented — renders `profile.html` with the logged-in user's real stats, category breakdown and 10 most recent expenses; redirects guests (and stale sessions) to `/login` |
 | `GET /expenses/add` | Stub — Step 7 |
 | `GET /expenses/<id>/edit` | Stub — Step 8 |
 | `GET /expenses/<id>/delete` | Stub — Step 9 |
@@ -112,6 +117,7 @@ pytest -s
 - **Never put DB logic in route functions** — it belongs in `database/db.py`
 - **Never install new packages** mid-feature without flagging it — keep `requirements.txt` in sync
 - **Never use JS frameworks** — the frontend is intentionally vanilla
-- **`database/db.py` is currently empty** — do not assume helpers exist until the step that implements them
+- **Only use DB helpers that already exist in `database/db.py`** — do not assume helpers for later steps (e.g. add/edit/delete expense) exist until the step that implements them
+- **Tests must never touch `expense_tracker.db`** — use the fixtures in `tests/conftest.py`, which point `DB_PATH` at a temp file
 - **FK enforcement is manual** — SQLite foreign keys are off by default; `get_db()` must run `PRAGMA foreign_keys = ON` on every connection
 - The app runs on **port 5001**, not the Flask default 5000 — don't change this
