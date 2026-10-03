@@ -60,11 +60,56 @@ spendly/
 ## Subagent Policy
 - Always use a builtin explore subagent for codebase exploration 
   before implementing any new feature
-- Always use a subagent to verify test results 
-  after any implementation
 - When asked to plan, delegate codebase research 
   to a subagent before presenting the plan
 - always use a builtin plan subagent in plan mode
+
+### Post-implementation pipeline
+
+After implementing any feature, run these two commands 
+in order. `<spec-name>` is the spec's filename without 
+`.md`, e.g. `05-profile-backend`.
+
+1. **`/test-feature <spec-name>`** — testing
+   - `spendly-test-writer` writes tests from 
+     `.claude/specs/<spec-name>.md`, never from the 
+     implementation, into `tests/test_<feature>.py` 
+     (step number dropped, underscores: 
+     `05-profile-backend` → `tests/test_profile_backend.py`). 
+     It only writes tests; it does not run them.
+   - Then `spendly-test-runner` runs that file only and 
+     diagnoses failures. This is the subagent that 
+     verifies test results after any implementation.
+   - The command never fixes code. If tests fail, fix 
+     the implementation (or flag the spec to the user) 
+     and re-run `/test-feature` until it's green.
+2. **`/code-review-feature <spec-name>`** — review, once 
+   tests pass
+   - `spendly-security-reviewer` and 
+     `spendly-quality-reviewer` run in parallel on the 
+     branch's changes (committed, uncommitted and 
+     untracked).
+   - The command merges both into one report with an 
+     action plan and verdict, then asks before changing 
+     anything. Never edit files until the user approves.
+
+### Subagent rules
+- Agent definitions live in `.claude/agents/`; the 
+  commands that orchestrate them live in 
+  `.claude/commands/`
+- Prefer the commands over invoking the agents one by 
+  one. If invoking directly, keep the same order: 
+  test-writer → test-runner → both reviewers in 
+  parallel (one message, two Agent calls)
+- Never invoke `spendly-test-runner` before the test 
+  file exists
+- A failing spec-based test means the implementation 
+  (or the spec) is wrong — never weaken a test's 
+  assertions to make it pass
+- Reviewer findings are educational: the verdict is a 
+  recommendation, and the user decides what to fix
+- Relay each subagent's report to the user; they can't 
+  see subagent output directly
 
 ---
 
