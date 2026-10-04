@@ -176,6 +176,19 @@
 .profile-table .profile-actions {
     text-align: right;
     width: 1%;
+    white-space: nowrap;
+}
+
+.profile-edit-link {
+    color: var(--accent);
+    font-weight: 500;
+    text-decoration: none;
+    margin-right: 0.75rem;
+}
+
+.profile-edit-link:hover,
+.profile-edit-link:focus-visible {
+    text-decoration: underline;
 }
 
 .profile-delete-link {

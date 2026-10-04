@@ -15,7 +15,8 @@ spendly/
 │   └── db.py           # SQLite helpers: get_db(), init_db(), seed_db(),
 │                       #   create_user(), get_user_by_email(), get_user_by_id(),
 │                       #   get_expense_summary(), get_category_totals(), get_recent_expenses(),
-│                       #   insert_expense(), get_expense_for_user(), delete_expense_for_user()
+│                       #   insert_expense(), get_expense_for_user(), delete_expense_for_user(),
+│                       #   update_expense_for_user()
 ├── templates/
 │   ├── base.html       # Shared layout — all templates must extend this
 │   └── *.html          # One template per page
@@ -152,7 +153,7 @@ pytest -s
 | `GET /logout` | Implemented — clears session, redirects to `/` |
 | `GET /profile` | Implemented — renders `profile.html` with the logged-in user's real stats, category breakdown and 10 most recent expenses; optional `?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD` filter (inclusive, applied only when both are valid) with presets This Month / Last 3 Months / Last 6 Months / All Time; a reversed range flashes an error and shows all time; redirects guests (and stale sessions) to `/login` |
 | `GET, POST /expenses/add` | Implemented — renders `add_expense.html`; POST validates amount/category/date/description, inserts via `insert_expense()`, flashes "Expense added." and redirects to `/profile`; invalid input re-renders the form (200) with values kept; redirects guests (and stale sessions) to `/login` |
-| `GET /expenses/<id>/edit` | Stub — Step 8 |
+| `GET, POST /expenses/<id>/edit` | Implemented — GET renders `edit_expense.html` pre-filled with the stored values; POST re-validates via `parse_expense_form()`, updates via `update_expense_for_user()`, flashes "Expense updated." and redirects to `/profile`; invalid input re-renders the form (200) with values kept and the expense unchanged; missing or another user's expense → 404 (checked before validation); redirects guests (and stale sessions) to `/login` |
 | `GET, POST /expenses/<id>/delete` | Implemented — GET renders `delete_expense.html` confirmation (never deletes); POST deletes via `delete_expense_for_user()`, flashes "Expense deleted." and redirects to `/profile`; missing or another user's expense → 404; redirects guests (and stale sessions) to `/login` |
 
 **Do not implement a stub route unless the active task explicitly targets that step.**
