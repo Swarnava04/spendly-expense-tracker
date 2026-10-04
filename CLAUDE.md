@@ -146,7 +146,7 @@ pytest -s
 | `GET, POST /register` | Implemented — renders `register.html`; POST creates user, redirects to `/login` |
 | `GET, POST /login` | Implemented — renders `login.html`; POST checks credentials, sets `session["user_id"]`, redirects to `/` |
 | `GET /logout` | Implemented — clears session, redirects to `/` |
-| `GET /profile` | Implemented — renders `profile.html` with the logged-in user's real stats, category breakdown and 10 most recent expenses; redirects guests (and stale sessions) to `/login` |
+| `GET /profile` | Implemented — renders `profile.html` with the logged-in user's real stats, category breakdown and 10 most recent expenses; optional `?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD` filter (inclusive, applied only when both are valid) with presets This Month / Last 3 Months / Last 6 Months / All Time; a reversed range flashes an error and shows all time; redirects guests (and stale sessions) to `/login` |
 | `GET /expenses/add` | Stub — Step 7 |
 | `GET /expenses/<id>/edit` | Stub — Step 8 |
 | `GET /expenses/<id>/delete` | Stub — Step 9 |

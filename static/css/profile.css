@@ -175,6 +175,86 @@
     color: var(--ink-muted);
 }
 
+/* Filter bar -------------------------------------------------------- */
+
+.profile-flash {
+    padding: 0.75rem 1rem;
+    border: 1px solid;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+}
+
+.profile-flash-error {
+    background: var(--danger-light);
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+.profile-flash-success {
+    background: var(--accent-light);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.profile-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.profile-filter-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.profile-pill {
+    display: inline-block;
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--ink-soft);
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.profile-pill:hover {
+    border-color: var(--ink);
+    color: var(--ink);
+}
+
+.profile-pill.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--paper);
+}
+
+.profile-filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+}
+
+.profile-filter-field label {
+    display: block;
+    margin-bottom: 0.3rem;
+    color: var(--ink-muted);
+    font-size: 0.8rem;
+}
+
+.profile-filter-field .form-input {
+    width: auto;
+}
+
+.profile-filter-form.is-active .form-input {
+    border-color: var(--accent);
+}
+
 /* Responsive -------------------------------------------------------- */
 
 @media (max-width: 900px) {
@@ -189,4 +269,8 @@
     .profile-page { padding: 1.5rem 1rem 3rem; }
     .profile-stats { grid-template-columns: 1fr; }
     .profile-header { flex-direction: column; text-align: center; }
+    .profile-filter,
+    .profile-filter-form { flex-direction: column; align-items: stretch; }
+    .profile-filter-field .form-input,
+    .profile-filter-form .btn-primary { width: 100%; }
 }
