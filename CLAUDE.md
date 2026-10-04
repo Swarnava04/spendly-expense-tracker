@@ -9,12 +9,13 @@ Spendly is a lightweight personal expense tracker built with Flask and SQLite.
 ## Architecture
 ```
 spendly/
-├── app.py              # All routes — single file, no blueprints
+├── app.py              # All routes — single file, no blueprints;
+│                       #   get_current_user() is the shared logged-in guard
 ├── database/
 │   └── db.py           # SQLite helpers: get_db(), init_db(), seed_db(),
 │                       #   create_user(), get_user_by_email(), get_user_by_id(),
 │                       #   get_expense_summary(), get_category_totals(), get_recent_expenses(),
-│                       #   insert_expense()
+│                       #   insert_expense(), get_expense_for_user(), delete_expense_for_user()
 ├── templates/
 │   ├── base.html       # Shared layout — all templates must extend this
 │   └── *.html          # One template per page
@@ -22,7 +23,8 @@ spendly/
 │   ├── css/
 │   │   ├── style.css       # Global styles
 │   │   ├── profile.css     # Profile-page-only styles
-│   │   └── add_expense.css # Add-expense-page-only styles
+│   │   ├── add_expense.css # Add-expense-page-only styles
+│   │   └── delete_expense.css # Delete-confirmation-page-only styles
 │   └── js/
 │       └── main.js         # Vanilla JS only
 ├── tests/
@@ -151,7 +153,7 @@ pytest -s
 | `GET /profile` | Implemented — renders `profile.html` with the logged-in user's real stats, category breakdown and 10 most recent expenses; optional `?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD` filter (inclusive, applied only when both are valid) with presets This Month / Last 3 Months / Last 6 Months / All Time; a reversed range flashes an error and shows all time; redirects guests (and stale sessions) to `/login` |
 | `GET, POST /expenses/add` | Implemented — renders `add_expense.html`; POST validates amount/category/date/description, inserts via `insert_expense()`, flashes "Expense added." and redirects to `/profile`; invalid input re-renders the form (200) with values kept; redirects guests (and stale sessions) to `/login` |
 | `GET /expenses/<id>/edit` | Stub — Step 8 |
-| `GET /expenses/<id>/delete` | Stub — Step 9 |
+| `GET, POST /expenses/<id>/delete` | Implemented — GET renders `delete_expense.html` confirmation (never deletes); POST deletes via `delete_expense_for_user()`, flashes "Expense deleted." and redirects to `/profile`; missing or another user's expense → 404; redirects guests (and stale sessions) to `/login` |
 
 **Do not implement a stub route unless the active task explicitly targets that step.**
 

@@ -9,7 +9,9 @@ from werkzeug.security import check_password_hash
 from database.db import (
     CATEGORIES,
     create_user,
+    delete_expense_for_user,
     get_category_totals,
+    get_expense_for_user,
     get_expense_summary,
     get_recent_expenses,
     get_user_by_email,
@@ -25,6 +27,21 @@ app.secret_key = "spendly-dev-secret-change-me"
 with app.app_context():
     init_db()
     seed_db()
+
+
+# ------------------------------------------------------------------ #
+# Auth helpers                                                        #
+# ------------------------------------------------------------------ #
+
+def get_current_user():
+    """Return the logged-in user's row, or None (clearing a stale session)."""
+    user_id = session.get("user_id")
+    if user_id is None:
+        return None
+    user = get_user_by_id(user_id)
+    if user is None:
+        session.clear()
+    return user
 
 
 # ------------------------------------------------------------------ #
@@ -149,6 +166,7 @@ def build_transactions(user_id, date_from=None, date_to=None):
     """Return the 10 most recent expenses as dicts for the table."""
     return [
         {
+            "id": row["id"],
             "date": row["date"],
             "description": row["description"],
             "category": row["category"],
@@ -248,14 +266,10 @@ def build_filters(date_from, date_to, today):
 
 @app.route("/profile")
 def profile():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
-
-    user_id = session["user_id"]
-    user_row = get_user_by_id(user_id)
+    user_row = get_current_user()
     if user_row is None:
-        session.clear()
         return redirect(url_for("login"))
+    user_id = session["user_id"]
 
     date_from, date_to, error = parse_date_filter(request.args)
     if error:
@@ -322,13 +336,9 @@ def parse_expense_form(form):
 
 @app.route("/expenses/add", methods=["GET", "POST"])
 def add_expense():
-    if "user_id" not in session:
+    if get_current_user() is None:
         return redirect(url_for("login"))
-
     user_id = session["user_id"]
-    if get_user_by_id(user_id) is None:
-        session.clear()
-        return redirect(url_for("login"))
 
     if request.method == "GET":
         form = {"date": date.today().isoformat()}
@@ -349,6 +359,29 @@ def add_expense():
 
 
 # ------------------------------------------------------------------ #
+# Delete expense                                                      #
+# ------------------------------------------------------------------ #
+
+@app.route("/expenses/<int:id>/delete", methods=["GET", "POST"])
+def delete_expense(id):
+    if get_current_user() is None:
+        return redirect(url_for("login"))
+    user_id = session["user_id"]
+
+    expense = get_expense_for_user(id, user_id)
+    if expense is None:
+        abort(404)
+
+    if request.method == "GET":
+        return render_template("delete_expense.html", expense=expense)
+
+    if delete_expense_for_user(id, user_id) == 0:
+        abort(404)
+    flash("Expense deleted.", "success")
+    return redirect(url_for("profile"))
+
+
+# ------------------------------------------------------------------ #
 # Placeholder routes — students will implement these                  #
 # ------------------------------------------------------------------ #
 
@@ -356,11 +389,6 @@ def add_expense():
 @app.route("/expenses/<int:id>/edit")
 def edit_expense(id):
     return "Edit expense — coming in Step 8"
-
-
-@app.route("/expenses/<int:id>/delete")
-def delete_expense(id):
-    return "Delete expense — coming in Step 9"
 
 
 if __name__ == "__main__":

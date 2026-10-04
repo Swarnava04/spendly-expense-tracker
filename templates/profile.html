@@ -94,6 +94,7 @@
                             <th>Description</th>
                             <th>Category</th>
                             <th class="profile-num">Amount</th>
+                            <th class="profile-actions"><span class="profile-sr-only">Actions</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -103,6 +104,7 @@
                             <td>{% if t.description %}{{ t.description }}{% else %}<span class="profile-muted">—</span>{% endif %}</td>
                             <td><span class="profile-badge">{{ t.category }}</span></td>
                             <td class="profile-num">₹{{ "%.2f"|format(t.amount) }}</td>
+                            <td class="profile-actions"><a href="{{ url_for('delete_expense', id=t.id) }}" class="profile-delete-link">Delete</a></td>
                         </tr>
                         {% endfor %}
                     </tbody>

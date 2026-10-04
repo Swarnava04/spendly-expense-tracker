@@ -78,6 +78,33 @@ def insert_expense(user_id, amount, category, date, description):
         conn.close()
 
 
+# --- Delete expense ------------------------------------------------ #
+
+def get_expense_for_user(expense_id, user_id):
+    conn = get_db()
+    try:
+        return conn.execute(
+            "SELECT id, amount, category, date, description FROM expenses "
+            "WHERE id = ? AND user_id = ?",
+            (expense_id, user_id),
+        ).fetchone()
+    finally:
+        conn.close()
+
+
+def delete_expense_for_user(expense_id, user_id):
+    conn = get_db()
+    try:
+        cursor = conn.execute(
+            "DELETE FROM expenses WHERE id = ? AND user_id = ?",
+            (expense_id, user_id),
+        )
+        conn.commit()
+        return cursor.rowcount
+    finally:
+        conn.close()
+
+
 # --- Date range filter --------------------------------------------- #
 
 def _date_range_params(date_from, date_to):
