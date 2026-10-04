@@ -62,16 +62,29 @@ def get_user_by_id(user_id):
         conn.close()
 
 
+# --- Date range filter --------------------------------------------- #
+
+def _date_range_params(date_from, date_to):
+    """Bind values for `(? IS NULL OR date BETWEEN ? AND ?)`.
+
+    The range only applies when both bounds are given.
+    """
+    if not date_from or not date_to:
+        return (None, None, None)
+    return (date_from, date_from, date_to)
+
+
 # --- Summary stats (subagent 2) ------------------------------------ #
 
-def get_expense_summary(user_id):
+def get_expense_summary(user_id, date_from=None, date_to=None):
     conn = get_db()
     try:
         return conn.execute(
             "SELECT COALESCE(SUM(amount), 0) AS total_spent, "
             "COUNT(*) AS transaction_count "
-            "FROM expenses WHERE user_id = ?",
-            (user_id,),
+            "FROM expenses WHERE user_id = ? "
+            "AND (? IS NULL OR date BETWEEN ? AND ?)",
+            (user_id, *_date_range_params(date_from, date_to)),
         ).fetchone()
     finally:
         conn.close()
@@ -79,14 +92,15 @@ def get_expense_summary(user_id):
 
 # --- Category breakdown (subagent 3) ------------------------------- #
 
-def get_category_totals(user_id):
+def get_category_totals(user_id, date_from=None, date_to=None):
     conn = get_db()
     try:
         return conn.execute(
             "SELECT category, SUM(amount) AS total FROM expenses "
-            "WHERE user_id = ? GROUP BY category "
+            "WHERE user_id = ? AND (? IS NULL OR date BETWEEN ? AND ?) "
+            "GROUP BY category "
             "ORDER BY total DESC, category ASC",
-            (user_id,),
+            (user_id, *_date_range_params(date_from, date_to)),
         ).fetchall()
     finally:
         conn.close()
@@ -94,13 +108,14 @@ def get_category_totals(user_id):
 
 # --- Transaction history (subagent 1) ------------------------------ #
 
-def get_recent_expenses(user_id, limit=10):
+def get_recent_expenses(user_id, limit=10, date_from=None, date_to=None):
     conn = get_db()
     try:
         return conn.execute(
             "SELECT id, date, description, category, amount FROM expenses "
-            "WHERE user_id = ? ORDER BY date DESC, id DESC LIMIT ?",
-            (user_id, limit),
+            "WHERE user_id = ? AND (? IS NULL OR date BETWEEN ? AND ?) "
+            "ORDER BY date DESC, id DESC LIMIT ?",
+            (user_id, *_date_range_params(date_from, date_to), limit),
         ).fetchall()
     finally:
         conn.close()
