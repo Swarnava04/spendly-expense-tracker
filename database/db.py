@@ -62,6 +62,22 @@ def get_user_by_id(user_id):
         conn.close()
 
 
+# --- Add expense --------------------------------------------------- #
+
+def insert_expense(user_id, amount, category, date, description):
+    conn = get_db()
+    try:
+        cursor = conn.execute(
+            "INSERT INTO expenses (user_id, amount, category, date, description) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (user_id, amount, category, date, description),
+        )
+        conn.commit()
+        return cursor.lastrowid
+    finally:
+        conn.close()
+
+
 # --- Date range filter --------------------------------------------- #
 
 def _date_range_params(date_from, date_to):

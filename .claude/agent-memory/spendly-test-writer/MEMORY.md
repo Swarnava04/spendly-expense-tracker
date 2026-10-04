@@ -1,0 +1,1 @@
+- [Test suite patterns](test_suite_patterns.md) — fixtures, file map, stale-session/flash/error-message test patterns

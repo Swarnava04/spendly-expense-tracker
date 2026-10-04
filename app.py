@@ -1,4 +1,5 @@
 import calendar
+import math
 import sqlite3
 from datetime import date, datetime
 
@@ -6,6 +7,7 @@ from flask import Flask, abort, flash, redirect, render_template, request, sessi
 from werkzeug.security import check_password_hash
 
 from database.db import (
+    CATEGORIES,
     create_user,
     get_category_totals,
     get_expense_summary,
@@ -13,6 +15,7 @@ from database.db import (
     get_user_by_email,
     get_user_by_id,
     init_db,
+    insert_expense,
     seed_db,
 )
 
@@ -278,13 +281,76 @@ def profile():
 
 
 # ------------------------------------------------------------------ #
-# Placeholder routes — students will implement these                  #
+# Add expense                                                         #
 # ------------------------------------------------------------------ #
 
+DESCRIPTION_MAX_LENGTH = 200
 
-@app.route("/expenses/add")
+
+def parse_expense_form(form):
+    """Return (values, error) for a submitted add-expense form.
+
+    `values` holds the cleaned amount, category, date and description;
+    `error` is the first failing check's message, or None.
+    """
+    try:
+        amount = float(form.get("amount", ""))
+    except ValueError:
+        amount = None
+    if amount is None or not math.isfinite(amount) or amount <= 0:
+        return None, "Amount must be a positive number."
+
+    category = form.get("category", "")
+    if category not in CATEGORIES:
+        return None, "Please choose a valid category."
+
+    expense_date = _parse_iso_date(form.get("date", ""))
+    if expense_date is None:
+        return None, "Please enter a valid date."
+
+    description = form.get("description", "").strip()
+    if len(description) > DESCRIPTION_MAX_LENGTH:
+        return None, "Description must be 200 characters or fewer."
+
+    return {
+        "amount": round(amount, 2),
+        "category": category,
+        "date": expense_date.isoformat(),
+        "description": description or None,
+    }, None
+
+
+@app.route("/expenses/add", methods=["GET", "POST"])
 def add_expense():
-    return "Add expense — coming in Step 7"
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
+    user_id = session["user_id"]
+    if get_user_by_id(user_id) is None:
+        session.clear()
+        return redirect(url_for("login"))
+
+    if request.method == "GET":
+        form = {"date": date.today().isoformat()}
+        return render_template(
+            "add_expense.html", categories=CATEGORIES, form=form
+        )
+
+    values, error = parse_expense_form(request.form)
+    if error:
+        flash(error, "error")
+        return render_template(
+            "add_expense.html", categories=CATEGORIES, form=request.form
+        )
+
+    insert_expense(user_id, **values)
+    flash("Expense added.", "success")
+    return redirect(url_for("profile"))
+
+
+# ------------------------------------------------------------------ #
+# Placeholder routes — students will implement these                  #
+# ------------------------------------------------------------------ #
 
 
 @app.route("/expenses/<int:id>/edit")
