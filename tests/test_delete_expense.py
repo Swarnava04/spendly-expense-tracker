@@ -425,18 +425,3 @@ def test_profile_has_no_delete_links_for_other_users(client, logged_in, other_us
     html = client.get("/profile").get_data(as_text=True)
 
     assert f"/expenses/{theirs_id}/delete" not in html
-
-
-# --- edit stub untouched ---------------------------------------------------
-
-
-def test_edit_route_is_still_a_stub(client, logged_in):
-    expense_id = db.insert_expense(logged_in, 42.5, "Food", "2026-01-15", "Lunch")
-
-    response = client.get(f"/expenses/{expense_id}/edit")
-    html = response.get_data(as_text=True)
-
-    assert response.status_code == 200
-    assert "<form" not in html.lower()
-    assert "Lunch" not in html
-    assert _expense_exists(expense_id)

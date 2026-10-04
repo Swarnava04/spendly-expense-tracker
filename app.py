@@ -19,6 +19,7 @@ from database.db import (
     init_db,
     insert_expense,
     seed_db,
+    update_expense_for_user,
 )
 
 app = Flask(__name__)
@@ -382,13 +383,44 @@ def delete_expense(id):
 
 
 # ------------------------------------------------------------------ #
-# Placeholder routes — students will implement these                  #
+# Edit expense                                                        #
 # ------------------------------------------------------------------ #
 
-
-@app.route("/expenses/<int:id>/edit")
+@app.route("/expenses/<int:id>/edit", methods=["GET", "POST"])
 def edit_expense(id):
-    return "Edit expense — coming in Step 8"
+    if get_current_user() is None:
+        return redirect(url_for("login"))
+    user_id = session["user_id"]
+
+    expense = get_expense_for_user(id, user_id)
+    if expense is None:
+        abort(404)
+
+    if request.method == "GET":
+        form = {
+            "amount": "%.2f" % expense["amount"],
+            "category": expense["category"],
+            "date": expense["date"],
+            "description": expense["description"] or "",
+        }
+        return render_template(
+            "edit_expense.html", categories=CATEGORIES, form=form, expense_id=id
+        )
+
+    values, error = parse_expense_form(request.form)
+    if error:
+        flash(error, "error")
+        return render_template(
+            "edit_expense.html",
+            categories=CATEGORIES,
+            form=request.form,
+            expense_id=id,
+        )
+
+    if update_expense_for_user(id, user_id, **values) == 0:
+        abort(404)
+    flash("Expense updated.", "success")
+    return redirect(url_for("profile"))
 
 
 if __name__ == "__main__":

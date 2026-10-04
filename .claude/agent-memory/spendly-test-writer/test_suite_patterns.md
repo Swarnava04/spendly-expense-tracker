@@ -7,6 +7,7 @@ metadata:
 
 - conftest fixtures: `app`, `client`, `make_user(name,email,password)`, `login(email,password)`, `add_expense(user_id, amount, category, date, description=None)` (direct-insert factory, returns nothing — use `db.insert_expense(...)` when you need the id; don't shadow it; use a local `logged_in` fixture instead).
 - Files: test_profile.py (profile backend), test_date_filter_profile.py (step 6 filter), test_add_expense.py (step 7, /expenses/add + insert_expense), test_delete_expense.py (step 9, /expenses/<id>/delete + get_expense_for_user/delete_expense_for_user).
+- test_edit_expense.py (step 8, /expenses/<id>/edit + update_expense_for_user). Step 8 spec gives exact error strings, so assert them directly (no `_shows_error` heuristic). For "created_at unchanged" tests, pin created_at to a fixed value via parameterized UPDATE first (default is datetime('now')).
 - Stale-session pattern: `client.session_transaction()` set user_id=9999, expect 302 to /login and user_id removed.
 - Flash check without following redirect: read `sess["_flashes"]` -> list of (category, message).
 - Flashes are rendered per-page (profile/login/register/add_expense templates), not in base.html.
