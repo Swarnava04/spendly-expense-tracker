@@ -13,14 +13,16 @@ spendly/
 ├── database/
 │   └── db.py           # SQLite helpers: get_db(), init_db(), seed_db(),
 │                       #   create_user(), get_user_by_email(), get_user_by_id(),
-│                       #   get_expense_summary(), get_category_totals(), get_recent_expenses()
+│                       #   get_expense_summary(), get_category_totals(), get_recent_expenses(),
+│                       #   insert_expense()
 ├── templates/
 │   ├── base.html       # Shared layout — all templates must extend this
 │   └── *.html          # One template per page
 ├── static/
 │   ├── css/
 │   │   ├── style.css       # Global styles
-│   │   └── profile.css     # Profile-page-only styles
+│   │   ├── profile.css     # Profile-page-only styles
+│   │   └── add_expense.css # Add-expense-page-only styles
 │   └── js/
 │       └── main.js         # Vanilla JS only
 ├── tests/
@@ -147,7 +149,7 @@ pytest -s
 | `GET, POST /login` | Implemented — renders `login.html`; POST checks credentials, sets `session["user_id"]`, redirects to `/` |
 | `GET /logout` | Implemented — clears session, redirects to `/` |
 | `GET /profile` | Implemented — renders `profile.html` with the logged-in user's real stats, category breakdown and 10 most recent expenses; optional `?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD` filter (inclusive, applied only when both are valid) with presets This Month / Last 3 Months / Last 6 Months / All Time; a reversed range flashes an error and shows all time; redirects guests (and stale sessions) to `/login` |
-| `GET /expenses/add` | Stub — Step 7 |
+| `GET, POST /expenses/add` | Implemented — renders `add_expense.html`; POST validates amount/category/date/description, inserts via `insert_expense()`, flashes "Expense added." and redirects to `/profile`; invalid input re-renders the form (200) with values kept; redirects guests (and stale sessions) to `/login` |
 | `GET /expenses/<id>/edit` | Stub — Step 8 |
 | `GET /expenses/<id>/delete` | Stub — Step 9 |
 

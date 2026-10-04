@@ -1,0 +1,20 @@
+/* ------------------------------------------------------------------ */
+/* Add expense page                                                    */
+/* ------------------------------------------------------------------ */
+
+.expense-form select.form-input {
+    appearance: none;
+    cursor: pointer;
+    background-color: var(--paper);
+    color: var(--ink);
+}
+
+.expense-form input[type="date"].form-input {
+    font-family: var(--font-body);
+    color: var(--ink);
+}
+
+.expense-optional {
+    color: var(--ink-faint);
+    font-weight: 400;
+}

@@ -98,6 +98,18 @@
     margin-bottom: 1rem;
 }
 
+.profile-section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.profile-section-head .profile-section-title {
+    margin-bottom: 0;
+}
+
 .profile-cat-row {
     margin-bottom: 0.9rem;
 }
