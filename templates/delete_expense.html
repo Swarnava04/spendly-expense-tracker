@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Expense — Spendly{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/delete_expense.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="auth-section">
+    <div class="auth-container">
+
+        <div class="auth-header">
+            <h1 class="auth-title">Delete this expense?</h1>
+            <p class="auth-subtitle">Review the details below before confirming</p>
+        </div>
+
+        <div class="auth-card">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+            <div class="auth-{{ 'success' if category == 'success' else 'error' }}">{{ message }}</div>
+            {% endfor %}
+            {% endwith %}
+
+            <dl class="delete-details">
+                <div class="delete-row">
+                    <dt>Date</dt>
+                    <dd>{{ expense.date }}</dd>
+                </div>
+                <div class="delete-row">
+                    <dt>Description</dt>
+                    <dd>{% if expense.description %}{{ expense.description }}{% else %}<span class="delete-muted">—</span>{% endif %}</dd>
+                </div>
+                <div class="delete-row">
+                    <dt>Category</dt>
+                    <dd><span class="delete-badge">{{ expense.category }}</span></dd>
+                </div>
+                <div class="delete-row">
+                    <dt>Amount</dt>
+                    <dd class="delete-amount">₹{{ "%.2f"|format(expense.amount) }}</dd>
+                </div>
+            </dl>
+
+            <p class="delete-warning">This action cannot be undone.</p>
+
+            <form method="post" action="{{ url_for('delete_expense', id=expense.id) }}">
+                <button type="submit" class="btn-submit btn-danger">Delete Expense</button>
+            </form>
+        </div>
+
+        <p class="auth-switch"><a href="{{ url_for('profile') }}">Cancel</a></p>
+
+    </div>
+</section>
+{% endblock %}
