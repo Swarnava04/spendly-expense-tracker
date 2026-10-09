@@ -3,5 +3,29 @@
     "allow": [
       "Artifact"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/venv/Scripts/python\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/format_python.py\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/venv/Scripts/python\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_destructive.py\""
+          }
+        ]
+      }
+    ]
   }
 }

@@ -1,0 +1,214 @@
+=====================================================================
+ CLAUDE CODE HOOKS & THE SESSION LIFECYCLE
+ ...and how they connect to the hooks in the Spendly project
+=====================================================================
+Written: 2026-10-09
+Source of project hooks: .claude/settings.json (currently uncommitted)
+
+
+---------------------------------------------------------------------
+1. WHAT IS A HOOK?
+---------------------------------------------------------------------
+A hook is a shell command (or HTTP call / prompt) that Claude Code
+itself runs automatically at a specific moment in a session.
+
+The key point: hooks are executed by the HARNESS, not by Claude.
+Claude cannot "forget" or choose to skip a hook. That makes hooks the
+right tool for rules that must ALWAYS happen ("format every Python file
+after it's edited", "never let anyone rm the database"), whereas
+CLAUDE.md instructions are guidance that Claude follows on a
+best-effort basis.
+
+Where hooks can be defined (all are merged together):
+  - ~/.claude/settings.json            -> user-wide, every project
+  - .claude/settings.json              -> this project, shared via git
+  - .claude/settings.local.json        -> this project, only you (gitignored)
+  - plugins / skill or agent frontmatter
+
+Shape of a hook entry:
+
+  "hooks": {
+    "<EventName>": [
+      {
+        "matcher": "<regex on tool name>",   <- only for tool events
+        "hooks": [
+          { "type": "command", "command": "<shell command>" }
+        ]
+      }
+    ]
+  }
+
+
+---------------------------------------------------------------------
+2. THE SESSION LIFECYCLE (when each hook event fires)
+---------------------------------------------------------------------
+
+  claude starts / resume / clear / compact
+        |
+        v
+  [SessionStart] ......... session begins. stdout is added to Claude's
+        |                  context (good for loading git status, TODOs).
+        v
+  +---> user types a prompt
+  |     |
+  |     v
+  |   [UserPromptSubmit] . before Claude sees the prompt. Can add
+  |     |                  context, or block the prompt (exit 2).
+  |     v
+  |   Claude thinks, decides to use a tool
+  |     |
+  |     v
+  |   [PreToolUse] ....... BEFORE the tool runs. Can ALLOW, DENY or
+  |     |                  ASK. Exit code 2 = block the tool call; the
+  |     |                  stderr text is shown to Claude as the reason.
+  |     v
+  |   (permission check -> [PermissionRequest] if a dialog would show)
+  |     |
+  |     v
+  |   tool runs (Bash, Edit, Write, Read, ...)
+  |     |
+  |     v
+  |   [PostToolUse] ...... AFTER the tool succeeded. Cannot undo the
+  |     |                  tool, but can react (format, lint, log) or
+  |     |                  feed feedback back to Claude (exit 2).
+  |     |                  ([PostToolUseFailure] if the tool failed.)
+  |     v
+  |   ... more tool calls loop through Pre/PostToolUse ...
+  |     |
+  |     |   [SubagentStart] / [SubagentStop] - when an Agent
+  |     |   (e.g. spendly-test-runner) is spawned / finishes
+  |     |
+  |   [Notification] ..... Claude Code wants your attention
+  |     |                  (permission needed, idle waiting).
+  |     v
+  |   [Stop] ............. Claude finished its reply. Exit 2 can
+  |     |                  force it to keep going (e.g. "tests not
+  |     |                  green yet").
+  +-----+
+        |
+  [PreCompact] ........... before context is summarized (manual/auto)
+        |
+        v
+  [SessionEnd] ........... exit, /clear, logout. Cleanup / logging.
+
+How a command hook talks to Claude Code:
+  INPUT  : a JSON object on stdin, e.g. for a tool event:
+           { "session_id": "...", "hook_event_name": "PreToolUse",
+             "tool_name": "Bash",
+             "tool_input": { "command": "rm expense_tracker.db" }, ... }
+  OUTPUT : the exit code
+           0      -> success, carry on (stdout may be parsed as JSON
+                     for advanced decisions)
+           2      -> BLOCKING error; stderr is sent to Claude
+                     (PreToolUse: the tool call is cancelled)
+           other  -> NON-blocking error; shown to you, the tool
+                     proceeds as if nothing happened
+
+
+---------------------------------------------------------------------
+3. THE HOOKS IN THIS PROJECT
+---------------------------------------------------------------------
+Both live in .claude/settings.json. Nothing in user settings or
+settings.local.json adds hooks for this project (the agents-observe
+plugin may register its own, but it is a separate plugin).
+
+HOOK A - PreToolUse / matcher "Bash"   ("destructive command guard")
+-------------------------------------------------------------------
+Lifecycle position : between "Claude decides to run a Bash command"
+                     and "the command actually runs".
+What it does       : reads tool_input.command from stdin. If the
+                     command contains one of
+                        'rm ', 'rm -', 'unlink ', 'truncate '
+                     AND one of the protected names
+                        'spendly.db', '.env', 'migrations/'
+                     it prints "BLOCKED: ..." to stderr and exits 2,
+                     so Claude Code cancels the Bash call and Claude
+                     is told why.
+Example flow       : Claude -> Bash("rm .env")
+                     -> PreToolUse hook -> exit 2 -> command never runs
+                     -> Claude sees "BLOCKED: Cannot run destructive
+                        command on protected file: .env"
+
+HOOK B - PostToolUse / matcher "Write|Edit"   ("auto-format Python")
+-------------------------------------------------------------------
+Lifecycle position : right after an Edit or Write tool call succeeds.
+What it does       : reads tool_input.file_path; if it ends in .py it
+                     runs `python3 -m black --quiet <file>`, so every
+                     Python file Claude touches (app.py, database/db.py,
+                     tests/test_*.py) is reformatted to Black style.
+Example flow       : Claude -> Edit(app.py) -> file saved
+                     -> PostToolUse hook -> black reformats app.py
+                     (exit code is ignored, so it never blocks Claude)
+
+How these fit the Spendly workflow (CLAUDE.md):
+  - Implementation step: every Edit/Write to a .py file triggers
+    Hook B -> keeps "PEP 8" code style automatic.
+  - /test-feature: spendly-test-writer uses Write to create
+    tests/test_<feature>.py -> Hook B formats it too.
+    spendly-test-runner uses Bash (pytest) -> passes through Hook A
+    (no rm/protected names, so allowed).
+  - Hooks also fire for tool calls made INSIDE subagents, so the
+    reviewers, test writer and test runner are covered as well.
+
+
+---------------------------------------------------------------------
+4. ISSUES FOUND WHILE CHECKING THESE HOOKS (on this machine)
+---------------------------------------------------------------------
+STATUS: (1)-(4) FIXED on 2026-10-09. The hook logic now lives in
+  .claude/hooks/guard_destructive.py   (PreToolUse, matcher "Bash|PowerShell")
+  .claude/hooks/format_python.py       (PostToolUse, matcher "Write|Edit")
+and settings.json runs them with the project venv:
+  "$CLAUDE_PROJECT_DIR/venv/Scripts/python" "$CLAUDE_PROJECT_DIR/.claude/hooks/<script>.py"
+The guard protects expense_tracker.db and .env and uses regexes for rm, del, mv,
+Remove-Item, Move-Item, Set-Content, Out-File, os.remove, shutil.rmtree,
+DROP TABLE, DELETE FROM and '>' redirects. black==26.10.0 is now in requirements.txt.
+Note: venv/Scripts/python is the Windows venv path; on macOS/Linux it is venv/bin/python.
+
+Original findings, verified in the terminal on 2026-10-09:
+
+ (1) `python3` is the Windows Store stub, not real Python.
+     Running `python3 ...` prints "Python was not found; run without
+     arguments to install from the Microsoft Store..." and exits 49.
+     Consequences:
+       - Hook B never formats anything (silent non-blocking error).
+       - Hook A NEVER BLOCKS anything: exit 49 is a non-blocking
+         error, so the Bash command proceeds. The guard is
+         effectively switched off.
+     Fix idea: call the venv interpreter explicitly, e.g.
+       "venv/Scripts/python" (relative to the project root), or
+       "python" if it resolves to a real install on PATH.
+
+ (2) Hook A protects the wrong database name.
+     The real DB is `expense_tracker.db` (DB_PATH in database/db.py).
+     `spendly.db` does not exist, and there is no `migrations/`
+     folder. Even with (1) fixed, `rm expense_tracker.db` would pass.
+     `.env` does exist and is correctly protected.
+     Fix idea: protected = ['expense_tracker.db', '.env'].
+
+ (3) Hook A is a substring check, so it is easy to bypass
+     (e.g. `del`, `mv x.db /dev/null`, `python -c "os.remove(...)"`,
+     `Remove-Item` via the PowerShell tool, which the "Bash" matcher
+     does not cover). Treat it as a safety net, not security.
+     Consider matcher "Bash|PowerShell".
+
+ (4) `black` is installed in the venv (26.10.0) but is not listed in
+     requirements.txt. A fresh clone + `pip install -r requirements.txt`
+     would leave Hook B without black. CLAUDE.md says to flag new
+     packages, so either add it (it's a dev tool) or note it.
+
+ (5) The hooks are uncommitted (`git status` shows
+     .claude/settings.json modified). Until committed, they exist only
+     in this working copy.
+
+
+---------------------------------------------------------------------
+5. QUICK REFERENCE
+---------------------------------------------------------------------
+  /hooks                 -> view the hooks Claude Code has loaded
+  claude --debug         -> see hook execution details
+  Exit 2 in PreToolUse   -> block the tool
+  Exit 2 in PostToolUse  -> tell Claude something went wrong (tool
+                            already ran)
+  Exit 2 in Stop         -> make Claude keep working
+  Matchers are regexes on the tool name: "Write|Edit", "Bash", "mcp__.*"
+=====================================================================
