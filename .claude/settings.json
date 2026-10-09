@@ -11,18 +11,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/venv/Scripts/python\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/format_python.py\""
+            "command": "if [ -d \"$CLAUDE_PROJECT_DIR/venv/Scripts\" ]; then PY=\"$CLAUDE_PROJECT_DIR/venv/Scripts/python\"; else PY=\"$CLAUDE_PROJECT_DIR/venv/bin/python\"; fi; \"$PY\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/format_python.py\""
           }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|PowerShell",
+        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/venv/Scripts/python\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_destructive.py\""
+            "command": "if [ -d \"$CLAUDE_PROJECT_DIR/venv/Scripts\" ]; then PY=\"$CLAUDE_PROJECT_DIR/venv/Scripts/python\"; else PY=\"$CLAUDE_PROJECT_DIR/venv/bin/python\"; fi; \"$PY\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_destructive.py\"; rc=$?; if [ $rc -ne 0 ]; then [ $rc -eq 2 ] || echo 'BLOCKED: the guard hook could not run (exit '$rc'). Is the venv set up? Failing closed.' >&2; exit 2; fi"
           }
         ]
       }

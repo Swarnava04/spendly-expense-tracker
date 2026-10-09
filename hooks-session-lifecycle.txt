@@ -164,6 +164,20 @@ Remove-Item, Move-Item, Set-Content, Out-File, os.remove, shutil.rmtree,
 DROP TABLE, DELETE FROM and '>' redirects. black==26.10.0 is now in requirements.txt.
 Note: venv/Scripts/python is the Windows venv path; on macOS/Linux it is venv/bin/python.
 
+UPDATE (same day) - hardening, done with hooks only (no permission deny rules):
+  - Fails closed: if the guard can't run (missing venv, crash), the hook
+    command exits 2, so the tool call is blocked instead of allowed.
+  - Picks venv/Scripts/python (Windows) or venv/bin/python (macOS/Linux).
+  - Glob-aware: wildcards like *.db, ./*, expense_*, .en? that could match
+    a protected file are blocked when used with a destructive command.
+  - The guard now also runs on Write|Edit|MultiEdit|NotebookEdit and blocks
+    changes to expense_tracker.db, .env, .claude/settings.json,
+    .claude/settings.local.json and anything in .claude/hooks/, so Claude
+    cannot switch the guard off. To change the hooks, edit those files
+    yourself in your editor.
+  - Still a text-matching safety net: it cannot stop someone who controls
+    their own machine from removing it.
+
 Original findings, verified in the terminal on 2026-10-09:
 
  (1) `python3` is the Windows Store stub, not real Python.
