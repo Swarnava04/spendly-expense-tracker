@@ -1,9 +1,19 @@
 import calendar
 import math
+import os
 import sqlite3
 from datetime import date, datetime
 
-from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
+from flask import (
+    Flask,
+    abort,
+    flash,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from werkzeug.security import check_password_hash
 
 from database.db import (
@@ -23,7 +33,7 @@ from database.db import (
 )
 
 app = Flask(__name__)
-app.secret_key = "spendly-dev-secret-change-me"
+app.secret_key = os.environ.get("SECRET_KEY", "spendly-dev-secret-change-me")
 
 with app.app_context():
     init_db()
@@ -33,6 +43,7 @@ with app.app_context():
 # ------------------------------------------------------------------ #
 # Auth helpers                                                        #
 # ------------------------------------------------------------------ #
+
 
 def get_current_user():
     """Return the logged-in user's row, or None (clearing a stale session)."""
@@ -48,6 +59,7 @@ def get_current_user():
 # ------------------------------------------------------------------ #
 # Routes                                                              #
 # ------------------------------------------------------------------ #
+
 
 @app.route("/")
 def landing():
@@ -120,6 +132,7 @@ def privacy():
 # Profile view-model builders                                         #
 # ------------------------------------------------------------------ #
 
+
 def build_user(user_row):
     words = user_row["name"].split()
     initials = (words[0][0] + (words[-1][0] if len(words) > 1 else "")).upper()
@@ -136,6 +149,7 @@ def build_user(user_row):
 
 # --- Summary stats (subagent 2) ------------------------------------ #
 
+
 def build_stats(user_id, date_from=None, date_to=None):
     """Return {"total_spent": float, "transaction_count": int}."""
     summary = get_expense_summary(user_id, date_from=date_from, date_to=date_to)
@@ -147,6 +161,7 @@ def build_stats(user_id, date_from=None, date_to=None):
 
 # --- Category breakdown (subagent 3) ------------------------------- #
 
+
 def build_categories(user_id, total_spent, date_from=None, date_to=None):
     """Return [{"name", "amount", "pct"}, ...] sorted by amount desc."""
     return [
@@ -155,13 +170,12 @@ def build_categories(user_id, total_spent, date_from=None, date_to=None):
             "amount": float(row["total"]),
             "pct": round(row["total"] / total_spent * 100, 1) if total_spent else 0,
         }
-        for row in get_category_totals(
-            user_id, date_from=date_from, date_to=date_to
-        )
+        for row in get_category_totals(user_id, date_from=date_from, date_to=date_to)
     ]
 
 
 # --- Transaction history (subagent 1) ------------------------------ #
+
 
 def build_transactions(user_id, date_from=None, date_to=None):
     """Return the 10 most recent expenses as dicts for the table."""
@@ -173,13 +187,12 @@ def build_transactions(user_id, date_from=None, date_to=None):
             "category": row["category"],
             "amount": float(row["amount"]),
         }
-        for row in get_recent_expenses(
-            user_id, date_from=date_from, date_to=date_to
-        )
+        for row in get_recent_expenses(user_id, date_from=date_from, date_to=date_to)
     ]
 
 
 # --- Date range filter --------------------------------------------- #
+
 
 def _parse_iso_date(value):
     """Return a date for a YYYY-MM-DD string, or None if empty/invalid."""
@@ -217,9 +230,7 @@ def _shift_months(d, months):
 
 def build_presets(today):
     """Return the quick-select date ranges for the filter bar."""
-    month_end = today.replace(
-        day=calendar.monthrange(today.year, today.month)[1]
-    )
+    month_end = today.replace(day=calendar.monthrange(today.year, today.month)[1])
     return [
         {
             "key": "month",
@@ -278,9 +289,7 @@ def profile():
 
     user = build_user(user_row)
     stats = build_stats(user_id, date_from, date_to)
-    categories = build_categories(
-        user_id, stats["total_spent"], date_from, date_to
-    )
+    categories = build_categories(user_id, stats["total_spent"], date_from, date_to)
     stats["top_category"] = categories[0]["name"] if categories else "—"
     transactions = build_transactions(user_id, date_from, date_to)
     filters = build_filters(date_from, date_to, date.today())
@@ -343,9 +352,7 @@ def add_expense():
 
     if request.method == "GET":
         form = {"date": date.today().isoformat()}
-        return render_template(
-            "add_expense.html", categories=CATEGORIES, form=form
-        )
+        return render_template("add_expense.html", categories=CATEGORIES, form=form)
 
     values, error = parse_expense_form(request.form)
     if error:
@@ -362,6 +369,7 @@ def add_expense():
 # ------------------------------------------------------------------ #
 # Delete expense                                                      #
 # ------------------------------------------------------------------ #
+
 
 @app.route("/expenses/<int:id>/delete", methods=["GET", "POST"])
 def delete_expense(id):
@@ -385,6 +393,7 @@ def delete_expense(id):
 # ------------------------------------------------------------------ #
 # Edit expense                                                        #
 # ------------------------------------------------------------------ #
+
 
 @app.route("/expenses/<int:id>/edit", methods=["GET", "POST"])
 def edit_expense(id):
