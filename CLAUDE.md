@@ -2,172 +2,198 @@
 
 ## Project overview
 
-Spendly is a lightweight personal expense tracker built with Flask and SQLite.
+Spendly is being rebuilt from a personal Flask + SQLite expense tracker
+into a **multi-company corporate accounting platform** with an AI
+advisor: double-entry ledger, reports and ratios, spend management,
+controls and audit, and AI recommendations.
+
+- Target architecture: `docs/ARCHITECTURE.md` (read it before any
+  design work)
+- Phases and specs: `docs/ROADMAP.md`
+- The old Flask app is frozen at git tag **`spendly-v1`**
+- Domain explainers: `workflows/` and `learnings/` (local only, never
+  committed)
+
+Guiding rule: **code calculates, AI explains, a human decides.**
 
 ---
 
-## Architecture
+## Current state (transition)
+
+Phase 0 is in progress. Until spec `p0-11-retire-legacy-flask` lands:
+
+- The **legacy Flask app** (`app.py`, `database/`, `templates/`,
+  `static/`, `tests/`, `requirements.txt`, root `venv/`) still exists.
+  **Don't add features to it**; touch it only to keep it running.
+- The `.claude` hooks run from the root `venv/`. **Never remove or
+  break `venv/` before `p0-02-claude-tooling` lands**: the guard hook
+  fails closed and blocks every tool call.
+- `.claude/agents/*` and the `/test-feature`, `/code-review-feature`,
+  `/create-spec` and seed commands still describe Flask/SQLite. They
+  are updated in `p0-02`. Until then, give them the new stack's
+  context explicitly in the prompt.
+
+---
+
+## Stack
+
+| Layer | Tech |
+|---|---|
+| API | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2 (async), Alembic |
+| Web | React 18, TypeScript, Vite, React Router, TanStack Query, Tailwind + shadcn/ui, Recharts, react-hook-form + zod |
+| DB | PostgreSQL 16 + pgvector, row-level security per company |
+| Cache / jobs | Redis 7, arq |
+| Events | Kafka (Redpanda locally) via a transactional outbox |
+| Identity | Keycloak (OIDC); per-company roles live in Postgres |
+| Files | MinIO (S3 API) |
+| Observability | OpenTelemetry → Prometheus, Tempo, Loki, Grafana |
+| AI | Claude API (tool use, vision), pgvector for policy search |
+| Tests | pytest + testcontainers, Vitest + Testing Library, Playwright |
+| Dev env | Docker Compose via `Makefile` |
+
+Adding a dependency is fine when a spec needs it. Add it to the right
+manifest (`apps/api/pyproject.toml`, `apps/web/package.json`) in the
+same change and mention it in the PR.
+
+---
+
+## Where things belong
+
 ```
-spendly/
-├── app.py              # All routes — single file, no blueprints;
-│                       #   get_current_user() is the shared logged-in guard
-├── database/
-│   └── db.py           # SQLite helpers: get_db(), init_db(), seed_db(),
-│                       #   create_user(), get_user_by_email(), get_user_by_id(),
-│                       #   get_expense_summary(), get_category_totals(), get_recent_expenses(),
-│                       #   insert_expense(), get_expense_for_user(), delete_expense_for_user(),
-│                       #   update_expense_for_user()
-├── templates/
-│   ├── base.html       # Shared layout — all templates must extend this
-│   └── *.html          # One template per page
-├── static/
-│   ├── css/
-│   │   ├── style.css       # Global styles
-│   │   ├── profile.css     # Profile-page-only styles
-│   │   ├── add_expense.css # Add-expense-page-only styles
-│   │   └── delete_expense.css # Delete-confirmation-page-only styles
-│   └── js/
-│       └── main.js         # Vanilla JS only
-├── tests/
-│   ├── conftest.py     # Fixtures — temp SQLite DB per test, never the real one
-│   └── test_*.py       # One test file per feature
-└── requirements.txt
+apps/api/spendly/modules/<module>/
+  router.py      HTTP only: parse, call service, shape response
+  service.py     business rules, transactions, permission checks
+  repository.py  all SQL for the module, nothing else
+  models.py      SQLAlchemy tables
+  schemas.py     Pydantic request/response models
+  events.py      event payloads the module emits
+apps/api/migrations/      Alembic only; never hand-edit the DB
+apps/web/src/features/<feature>/   pages, hooks, components for one feature
+apps/web/src/api/         generated OpenAPI client (never hand-edit)
+services/<name>/          Kafka consumers and workers
+packages/events/          JSON Schemas for every event (source of truth)
+infra/                    compose, keycloak realm, grafana, k8s
 ```
 
-**Where things belong:**
-- New routes → `app.py` only, no blueprints
-- DB logic → `database/db.py` only, never inline in routes
-- New pages → new `.html` file extending `base.html`
-- Page-specific styles → new `.css` file, not inline `<style>` tags
+---
+
+## Non-negotiable domain rules
+
+- **Money is exact:** `NUMERIC(18,2)` in Postgres, `Decimal` in Python,
+  strings in JSON, never JS `number` maths for totals. **No floats,
+  ever.**
+- **Double entry:** every journal entry has ≥ 2 lines and Σ debit =
+  Σ credit, enforced by a DB trigger as well as in the service.
+- **Posted entries are immutable.** Corrections are reversal entries.
+  Never write UPDATE/DELETE paths for posted ledger rows.
+- **Closed periods are locked** (DB trigger).
+- **Every company-owned row has `company_id`.** Every repository query
+  filters by it, *and* RLS is on. Never bypass RLS in request code.
+- **Ledger writes go through `apps/api` only.** Consumers never write
+  journal entries; they build projections, alerts and audit rows.
+- **Publish events via the outbox**, in the same transaction as the
+  write. Never call Kafka directly from a request handler.
+- **Consumers are idempotent** (dedupe on `event_id`).
+- **AI is read-only.** Advisor tools only read; AI output is a
+  recommendation a human accepts or rejects. Log every AI call.
+- **India-first:** fiscal year April–March, Schedule III layout, GST and
+  TDS as their own accounts (never part of income or expense).
 
 ---
 
 ## Code style
 
-- Python: PEP 8, snake_case for all variables and functions
-- Templates: Jinja2 with `url_for()` for every internal link — never hardcode URLs
-- Route functions: one responsibility only — fetch data, render template, done
-- DB queries: always use parameterized queries (`?` placeholders) — never f-strings in SQL
-- Error handling: use `abort()` for HTTP errors, not bare `return "error string"`
-
----
-
-## Tech constraints
-
-- **Flask only** — no FastAPI, no Django, no other web frameworks
-- **SQLite only** — no PostgreSQL, no SQLAlchemy ORM, no external DB
-- **Vanilla JS only** — no React, no jQuery, no npm packages
-- **No new pip packages** — work within `requirements.txt` as-is unless explicitly told otherwise
-- Python 3.10+ assumed — f-strings and `match` statements are fine
-
----
-
-## Subagent Policy
-- Always use a builtin explore subagent for codebase exploration 
-  before implementing any new feature
-- When asked to plan, delegate codebase research 
-  to a subagent before presenting the plan
-- always use a builtin plan subagent in plan mode
-
-### Post-implementation pipeline
-
-After implementing any feature, run these two commands 
-in order. `<spec-name>` is the spec's filename without 
-`.md`, e.g. `05-profile-backend`.
-
-1. **`/test-feature <spec-name>`** — testing
-   - `spendly-test-writer` writes tests from 
-     `.claude/specs/<spec-name>.md`, never from the 
-     implementation, into `tests/test_<feature>.py` 
-     (step number dropped, underscores: 
-     `05-profile-backend` → `tests/test_profile_backend.py`). 
-     It only writes tests; it does not run them.
-   - Then `spendly-test-runner` runs that file only and 
-     diagnoses failures. This is the subagent that 
-     verifies test results after any implementation.
-   - The command never fixes code. If tests fail, fix 
-     the implementation (or flag the spec to the user) 
-     and re-run `/test-feature` until it's green.
-2. **`/code-review-feature <spec-name>`** — review, once 
-   tests pass
-   - `spendly-security-reviewer` and 
-     `spendly-quality-reviewer` run in parallel on the 
-     branch's changes (committed, uncommitted and 
-     untracked).
-   - The command merges both into one report with an 
-     action plan and verdict, then asks before changing 
-     anything. Never edit files until the user approves.
-
-### Subagent rules
-- Agent definitions live in `.claude/agents/`; the 
-  commands that orchestrate them live in 
-  `.claude/commands/`
-- Prefer the commands over invoking the agents one by 
-  one. If invoking directly, keep the same order: 
-  test-writer → test-runner → both reviewers in 
-  parallel (one message, two Agent calls)
-- Never invoke `spendly-test-runner` before the test 
-  file exists
-- A failing spec-based test means the implementation 
-  (or the spec) is wrong — never weaken a test's 
-  assertions to make it pass
-- Reviewer findings are educational: the verdict is a 
-  recommendation, and the user decides what to fix
-- Relay each subagent's report to the user; they can't 
-  see subagent output directly
+- Python: ruff (lint + format), mypy strict on `apps/api`, snake_case,
+  type hints everywhere, async I/O
+- TypeScript: strict mode, ESLint + Prettier, function components and
+  hooks, server state via TanStack Query only
+- SQL: SQLAlchemy expressions or bound parameters only. Never build SQL
+  with f-strings or concatenation
+- HTTP errors: raise typed exceptions mapped to RFC 7807 problem
+  responses; no bare string error bodies
+- Config: only from environment via `config.py`; no secrets in code;
+  every variable documented in `.env.example`
 
 ---
 
 ## Commands
+
 ```bash
-# Setup
-python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-# Run dev server (port 5001)
-python app.py
-
-# Run all tests
-pytest
-
-# Run a specific test file
-pytest tests/test_foo.py
-
-# Run a specific test by name
-pytest -k "test_name"
-
-# Run tests with output visible
-pytest -s
+make up          # start the full stack (Docker Compose)
+make down        # stop, keep data
+make migrate     # alembic upgrade head
+make api         # run API with reload
+make web         # run Vite dev server
+make test        # all tests
+make test-api    # pytest (apps/api) — uses testcontainers
+make test-web    # vitest
+make e2e         # playwright
+make lint        # ruff, mypy, eslint, tsc
 ```
+
+These targets are created in `p0-01`–`p0-05`. Until then, the legacy
+app runs with `python app.py` (port 5001) and `pytest`.
 
 ---
 
-## Implemented vs stub routes
+## Subagent policy
 
-| Route | Status |
-|---|---|
-| `GET /` | Implemented — renders `landing.html` |
-| `GET, POST /register` | Implemented — renders `register.html`; POST creates user, redirects to `/login` |
-| `GET, POST /login` | Implemented — renders `login.html`; POST checks credentials, sets `session["user_id"]`, redirects to `/` |
-| `GET /logout` | Implemented — clears session, redirects to `/` |
-| `GET /profile` | Implemented — renders `profile.html` with the logged-in user's real stats, category breakdown and 10 most recent expenses; optional `?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD` filter (inclusive, applied only when both are valid) with presets This Month / Last 3 Months / Last 6 Months / All Time; a reversed range flashes an error and shows all time; redirects guests (and stale sessions) to `/login` |
-| `GET, POST /expenses/add` | Implemented — renders `add_expense.html`; POST validates amount/category/date/description, inserts via `insert_expense()`, flashes "Expense added." and redirects to `/profile`; invalid input re-renders the form (200) with values kept; redirects guests (and stale sessions) to `/login` |
-| `GET, POST /expenses/<id>/edit` | Implemented — GET renders `edit_expense.html` pre-filled with the stored values; POST re-validates via `parse_expense_form()`, updates via `update_expense_for_user()`, flashes "Expense updated." and redirects to `/profile`; invalid input re-renders the form (200) with values kept and the expense unchanged; missing or another user's expense → 404 (checked before validation); redirects guests (and stale sessions) to `/login` |
-| `GET, POST /expenses/<id>/delete` | Implemented — GET renders `delete_expense.html` confirmation (never deletes); POST deletes via `delete_expense_for_user()`, flashes "Expense deleted." and redirects to `/profile`; missing or another user's expense → 404; redirects guests (and stale sessions) to `/login` |
+- Always use a built-in Explore subagent for codebase exploration
+  before implementing a new feature
+- When asked to plan, delegate codebase research to a subagent before
+  presenting the plan
+- Always use a built-in Plan subagent in plan mode
 
-**Do not implement a stub route unless the active task explicitly targets that step.**
+### Post-implementation pipeline
+
+After implementing a spec, run these in order. `<spec-name>` is the
+spec filename without `.md`, e.g. `p0-04-api-skeleton`.
+
+1. **`/test-feature <spec-name>`**
+   - `spendly-test-writer` writes tests **from the spec in
+     `.claude/specs/<spec-name>.md`, never from the implementation**.
+     Tests go in the app the spec targets (`apps/api/tests/`,
+     `apps/web/src/**/*.test.tsx`, `e2e/`).
+   - `spendly-test-runner` runs those tests only and diagnoses failures.
+   - The command never fixes code. If tests fail, fix the
+     implementation (or flag the spec to the user) and re-run.
+2. **`/code-review-feature <spec-name>`**, once tests pass
+   - `spendly-security-reviewer` and `spendly-quality-reviewer` run in
+     parallel on the branch's changes.
+   - The command merges both into one report and asks before changing
+     anything. Never edit files until the user approves.
+3. **Write the `learnings/` explainer** for the spec (never committed).
+
+### Subagent rules
+
+- Agent definitions live in `.claude/agents/`; commands in
+  `.claude/commands/`
+- Prefer the commands over invoking agents one by one. Direct order:
+  test-writer → test-runner → both reviewers in parallel
+- Never invoke `spendly-test-runner` before the test file exists
+- A failing spec-based test means the implementation (or the spec) is
+  wrong. Never weaken assertions to make it pass
+- Reviewer findings are educational; the user decides what to fix
+- Relay each subagent's report to the user; they can't see subagent
+  output directly
 
 ---
 
 ## Warnings and things to avoid
 
-- **Never use raw string returns for stub routes** once a step is implemented — always render a template
-- **Never hardcode URLs** in templates — always use `url_for()`
-- **Never put DB logic in route functions** — it belongs in `database/db.py`
-- **Never install new packages** mid-feature without flagging it — keep `requirements.txt` in sync
-- **Never use JS frameworks** — the frontend is intentionally vanilla
-- **Only use DB helpers that already exist in `database/db.py`** — do not assume helpers for later steps (e.g. add/edit/delete expense) exist until the step that implements them
-- **Tests must never touch `expense_tracker.db`** — use the fixtures in `tests/conftest.py`, which point `DB_PATH` at a temp file
-- **FK enforcement is manual** — SQLite foreign keys are off by default; `get_db()` must run `PRAGMA foreign_keys = ON` on every connection
-- The app runs on **port 5001**, not the Flask default 5000 — don't change this
+- **Never use floats for money**, anywhere (Python, SQL, TypeScript)
+- **Never mutate posted ledger rows**, not even in migrations or seeds
+- **Never disable RLS** or connect the API as the table owner
+- **Tests never touch the dev database.** Integration tests use
+  testcontainers; unit tests use no DB
+- **Never commit secrets.** `.env` is local only; `.env.example` is the
+  documented template. Treat `.env` as protected
+- **Never run `docker compose down -v`, `DROP DATABASE` or
+  `alembic downgrade base`** without the user asking explicitly. They
+  destroy local data
+- **Don't hand-edit generated code** (`apps/web/src/api/`, Alembic
+  revisions after they're merged)
+- **Don't implement a later spec's work early.** Follow
+  `docs/ROADMAP.md`; when in doubt, ask
+- `learnings/` and `workflows/` are in `.git/info/exclude`. Never commit
+  them and never add them to `.gitignore`
